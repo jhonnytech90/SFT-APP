@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1216">
+<title>SFT — Feedback Trainer</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1216; --panel:#181c21; --panel2:#1f242a; --line:#2b323a; --line2:#3a434d;
+    --ink:#dfe4ea; --mute:#7f8a96; --cyan:#35c3e6; --cyan-dim:#1b6d80; --ok:#4fd18f; --bad:#f0554d; --amber:#f2b134;
+    --cap:#c9d0d8; --fw:38px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',system-ui,sans-serif;overscroll-behavior:none}
+  body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+
+  /* top bar */
+  header{display:flex;align-items:center;gap:10px;padding:12px 16px;background:linear-gradient(#1c2127,#151920);border-bottom:1px solid var(--line)}
+  .led{width:9px;height:9px;border-radius:50%;background:#3a3f46;box-shadow:inset 0 0 2px #000;flex:none}
+  .led.on{background:var(--cyan);box-shadow:0 0 8px var(--cyan),inset 0 0 2px #fff}
+  header h1{margin:0;font-size:15px;font-weight:600;letter-spacing:.3px}
+  header h1 small{font-weight:400;color:var(--mute);margin-left:8px}
+  header .sp{flex:1}
+  header button{color:var(--mute);font-size:14px;padding:6px 10px;border:1px solid var(--line);border-radius:4px}
+
+  /* readout */
+  .readout{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:center;padding:12px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .readout .msg{font-size:14px;min-height:36px;display:flex;align-items:center}
+  .readout .msg.ok{color:var(--ok)} .readout .msg.bad{color:var(--bad)}
+  .meter{text-align:right}
+  .meter .k{font-size:10px;color:var(--mute);letter-spacing:.6px;text-transform:uppercase}
+  .meter .v{font-size:22px;line-height:1.1;color:var(--cyan)}
+  .meter .v.soft{color:var(--ink)}
+
+  /* EQ faceplate */
+  .eq-wrap{background:linear-gradient(#20262d,#181c21);border-bottom:1px solid var(--line);position:relative}
+  .eq-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:0 12px}
+  .eq-scroll::-webkit-scrollbar{display:none}
+  .eq{display:flex;gap:2px;width:max-content;padding:14px 0 10px}
+  .band{width:var(--fw);display:flex;flex-direction:column;align-items:center;user-select:none;-webkit-user-select:none;touch-action:pan-x}
+  .band .lbl{font:500 11px/1 'IBM Plex Mono',monospace;color:var(--mute);margin-bottom:8px;white-space:nowrap}
+  .band .track{position:relative;width:100%;height:150px}
+  .band .track::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:4px;margin-left:-2px;background:#0a0c0f;border-radius:2px;box-shadow:inset 0 0 0 1px #05070a, 0 0 0 1px #262c33}
+  .band .track::after{content:"";position:absolute;left:8px;right:8px;top:50%;height:1px;background:var(--line2)}
+  .band .cap{position:absolute;left:50%;width:22px;height:30px;margin-left:-11px;top:calc(50% - 15px);background:linear-gradient(#e6ebf0,var(--cap) 45%,#8d97a3);border-radius:3px;box-shadow:0 2px 3px rgba(0,0,0,.7);transition:top .18s ease, background .18s}
+  .band .cap::after{content:"";position:absolute;left:3px;right:3px;top:14px;height:2px;background:#3b444e}
+  .band.cut .cap{top:calc(100% - 30px)}
+  .band.wrong .cap{background:linear-gradient(#f9a49f,var(--bad) 45%,#8e2d28)}
+  .band.right .cap{background:linear-gradient(#b5f2d2,var(--ok) 45%,#2a7a52)}
+  .band.off{opacity:.22;pointer-events:none}
+  .band.lit .lbl{color:var(--cyan)}
+  .eq-hint{position:absolute;right:14px;top:4px;font-size:11px;color:var(--mute)}
+  @media (prefers-reduced-motion:reduce){.band .cap{transition:none}}
+  @media (min-width:700px){:root{--fw:calc((100vw - 24px - 60px)/31)} .eq{width:100%}}
+
+  /* transport + mixer */
+  .controls{padding:14px 16px 10px;display:flex;flex-direction:column;gap:12px}
+  .start{height:54px;border-radius:6px;background:linear-gradient(#3fd0f3,var(--cyan));color:#08141a;font-weight:600;font-size:16px;letter-spacing:.4px;box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 3px 10px rgba(53,195,230,.25)}
+  .start.running{background:linear-gradient(#ff6d63,var(--bad));color:#fff;box-shadow:0 3px 10px rgba(240,85,77,.3)}
+  .start:active{filter:brightness(.92)}
+
+  .mixer{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px 4px}
+  .mixer .t{font-size:10px;color:var(--mute);letter-spacing:.6px;text-transform:uppercase;margin-bottom:6px}
+  .ch{display:grid;grid-template-columns:86px 1fr 40px;align-items:center;gap:10px;padding:6px 0;font-size:13px}
+  .ch input[type=range]{width:100%;accent-color:var(--cyan)}
+  .ch .val{text-align:right;color:var(--cyan);font-size:12px}
+  .ch.pink input[type=range]{accent-color:#e78fb3} .ch.pink .val{color:#e78fb3}
+  .ch.sw-row{grid-template-columns:1fr auto;border-top:1px solid var(--line);margin-top:4px;padding:10px 0 8px;color:var(--mute)}
+
+  .rounds{padding:0 16px 20px;font-size:13px;color:var(--mute)}
+  .rounds ol{margin:6px 0 0;padding-left:20px;line-height:1.6}
+  .rounds b{color:var(--ink);font-weight:500}
+  .rounds .w{color:var(--bad)} .rounds .r{color:var(--ok)}
+
+  /* switch */
+  .sw{position:relative;width:44px;height:24px;flex:none}
+  .sw input{opacity:0;width:0;height:0;position:absolute}
+  .sw i{position:absolute;inset:0;background:var(--line2);border-radius:12px;transition:.15s}
+  .sw i::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--cap);transition:.15s}
+  .sw input:checked+i{background:var(--cyan)} .sw input:checked+i::after{transform:translateX(20px)}
+
+  /* dialogs */
+  dialog{border:1px solid var(--line2);padding:0;background:var(--panel);color:var(--ink);border-radius:10px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  dialog::backdrop{background:rgba(0,0,0,.65)}
+  #opt{width:100%;max-width:520px;border-radius:12px 12px 0 0;margin:auto auto 0;border-bottom:0}
+  .sheet{padding:18px 20px calc(24px + env(safe-area-inset-bottom))}
+  .sheet h2{margin:0 0 10px;font-size:15px;font-weight:600}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .row small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+  select,input[type=number]{font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line2);border-radius:4px;padding:8px 10px;min-width:90px}
+  .sheet .done{margin-top:16px;width:100%;height:46px;border-radius:6px;background:var(--ink);color:var(--bg);font-weight:600}
+  .sheet p{color:var(--mute);font-size:12px;line-height:1.45;margin:14px 0 0}
+
+  #result{width:min(92vw,360px);margin:auto;text-align:center}
+  .res{padding:26px 22px 22px}
+  .res .k{font-size:11px;color:var(--mute);letter-spacing:.8px;text-transform:uppercase}
+  .res .grade{font-size:72px;line-height:1;margin:6px 0 4px;color:var(--cyan)}
+  .res .grade.g2{color:var(--amber)} .res .grade.g1{color:var(--bad)} .res .grade.g4{color:var(--ok)}
+  .res .sub{font-size:14px;color:var(--ink);margin-bottom:18px}
+  .res .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px}
+  .res .cell{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 4px}
+  .res .cell .n{font-size:20px} .res .cell .l{font-size:11px;color:var(--mute)}
+  .res .cell.ok .n{color:var(--ok)} .res .cell.bad .n{color:var(--bad)}
+  .res .again{width:100%;height:46px;border-radius:6px;background:var(--cyan);color:#08141a;font-weight:600}
+  .res .close{margin-top:8px;color:var(--mute);font-size:13px;padding:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="led" id="led"></span>
+  <h1>SFT<small>Feedback Trainer</small></h1>
+  <span class="sp"></span>
+  <button id="btnOpt">Configurar</button>
+</header>
+
+<div class="readout">
+  <span class="msg" id="msg">Toque num fader para ouvir a banda. Iniciar começa o treino.</span>
+  <div class="meter"><div class="k">Rodada</div><div class="v soft mono" id="round">–</div></div>
+  <div class="meter"><div class="k">Nota</div><div class="v mono" id="score">–</div></div>
+</div>
+
+<div class="eq-wrap">
+  <div class="eq-hint" id="eqHint">← deslize →</div>
+  <div class="eq-scroll" id="eqScroll"><div class="eq" id="eq"></div></div>
+</div>
+
+<div class="controls">
+  <button class="start" id="btnStart">Iniciar treino</button>
+  <div class="mixer">
+    <div class="t">Mixer</div>
+    <label class="ch"><span>Microfonia</span><input type="range" id="vol" min="0" max="100" value="40"><span class="val mono" id="volV">40</span></label>
+    <label class="ch pink"><span>Ruído rosa</span><input type="range" id="volPink" min="0" max="100" value="30"><span class="val mono" id="volPinkV">30</span></label>
+    <label class="ch sw-row"><span>Ruído rosa junto com a microfonia</span><span class="sw"><input type="checkbox" id="pinkOn"><i></i></span></label>
+  </div>
+</div>
+
+
+<dialog id="opt">
+  <form method="dialog" class="sheet">
+    <h2>Configurações</h2>
+    <label class="row"><span>Frequência mínima<small>Limite para bandas que seu fone/caixa não reproduz.</small></span><select id="minF"></select></label>
+    <label class="row"><span>Frequência máxima</span><select id="maxF"></select></label>
+    <label class="row"><span>Rodadas por treino</span><input type="number" id="goes" min="1" max="50" value="5"></label>
+    <label class="row"><span>Concentrar no meio da faixa<small>Microfonia real é mais comum nos médios.</small></span><span class="sw"><input type="checkbox" id="weight"><i></i></span></label>
+    <label class="row"><span>Só frequências ISO<small>Desligado: a microfonia pode cair entre duas bandas.</small></span><span class="sw"><input type="checkbox" id="iso" checked><i></i></span></label>
+    <label class="row"><span>Subida gradual do tom<small>Simula a microfonia crescendo aos poucos.</small></span><span class="sw"><input type="checkbox" id="ramp" checked><i></i></span></label>
+    <button class="done">Fechar</button>
+    <p>Nota de 0,0 a 10,0 = 10 × acertos ÷ (acertos + erros). Cada fader errado conta um erro. Baseado no Simple Feedback Trainer 2.1 (Ian Gregory, 2005, CDDL).</p>
+  </form>
+</dialog>
+
+<dialog id="result">
+  <div class="res">
+    <div class="k">Nota final</div>
+    <div class="grade mono" id="rGrade">10,0</div>
+    <div class="sub" id="rSub"></div>
+    <div class="grid">
+      <div class="cell"><div class="n mono" id="rRounds">0</div><div class="l">rodadas</div></div>
+      <div class="cell ok"><div class="n mono" id="rHits">0</div><div class="l">acertos</div></div>
+      <div class="cell bad"><div class="n mono" id="rMiss">0</div><div class="l">erros</div></div>
+    </div>
+    <button class="again" id="rAgain">Treinar de novo</button>
+    <button class="close" id="rClose">Fechar</button>
+  </div>
+</dialog>
+
+<script>
+const ISO=[0,20,25,31,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000,20000];
+const NAME=['','20','25','31','40','50','63','80','100','125','160','200','250','315','400','500','630','800','1k','1k25','1k6','2k','2k5','3k15','4k','5k','6k3','8k','10k','12k5','16k','20k',''];
+
+const store={
+  get(k,d){try{const v=localStorage.getItem('sft2.'+k);return v===null?d:JSON.parse(v)}catch(e){return d}},
+  set(k,v){try{localStorage.setItem('sft2.'+k,JSON.stringify(v))}catch(e){}}
+};
+const opt={
+  minId:store.get('minId',1), maxId:store.get('maxId',31), goes:store.get('goes',5),
+  weight:store.get('weight',false), iso:store.get('iso',true), ramp:store.get('ramp',true),
+  vol:store.get('vol',40), volPink:store.get('volPink',30), pink:store.get('pink',false)
+};
+
+// ---- Áudio ----
+let ctx=null, osc=null, gain=null, master=null, pinkSrc=null, pinkGain=null;
+function ensureAudio(){
+  if(!ctx){ctx=new (window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();master.connect(ctx.destination);
+    pinkGain=ctx.createGain();pinkGain.connect(ctx.destination);}
+  if(ctx.state==='suspended')ctx.resume();
+  master.gain.value=(opt.vol/100)**2; pinkGain.gain.value=(opt.volPink/100)**2;
+}
+function tone(freq,ramp){
+  ensureAudio(); stopTone(true);
+  osc=ctx.createOscillator(); gain=ctx.createGain();
+  osc.type='sine'; osc.frequency.value=freq;
+  const t=ctx.currentTime;
+  gain.gain.setValueAtTime(0.0001,t);
+  gain.gain.exponentialRampToValueAtTime(0.8, t+(ramp?1.2:0.02));
+  osc.connect(gain).connect(master); osc.start();
+}
+function stopTone(fast){
+  if(!osc)return;
+  const o=osc,g=gain,t=ctx.currentTime; osc=null;gain=null;
+  g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value||0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+(fast?0.03:0.12));
+  o.stop(t+0.15);
+}
+function pinkBuffer(){
+  const len=ctx.sampleRate*4, buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
+  let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+  for(let i=0;i<len;i++){const w=Math.random()*2-1;
+    b0=0.99886*b0+w*0.0555179;b1=0.99332*b1+w*0.0750759;b2=0.96900*b2+w*0.1538520;
+    b3=0.86650*b3+w*0.3104856;b4=0.55000*b4+w*0.5329522;b5=-0.7616*b5-w*0.0168980;
+    d[i]=(b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11;b6=w*0.115926;}
+  return buf;
+}
+function startPink(){ensureAudio();if(pinkSrc)return;pinkSrc=ctx.createBufferSource();pinkSrc.buffer=pinkBuffer();pinkSrc.loop=true;pinkSrc.connect(pinkGain);pinkSrc.start()}
+function stopPink(){if(!pinkSrc)return;try{pinkSrc.stop()}catch(e){}pinkSrc=null}
+
+// ---- Estado ----
+const S={running:false,left:0,total:0,actual:0,isoF:0,hits:0,miss:0,roundMiss:0,history:[],cur:null,listenTimer:null};
+const $=id=>document.getElementById(id);
+
+// ---- EQ ----
+const eq=$('eq'); const bands=[];
+for(let i=1;i<=31;i++){
+  const b=document.createElement('button'); b.className='band'; b.setAttribute('aria-label',NAME[i]+' Hz');
+  b.innerHTML=`<span class="lbl">${NAME[i]}</span><span class="track"><span class="cap"></span></span>`;
+  b.addEventListener('click',()=>onBand(i)); eq.appendChild(b); bands[i]=b;
+}
+function paintRange(){for(let i=1;i<=31;i++)bands[i].classList.toggle('off',i<opt.minId||i>opt.maxId)}
+function resetFaders(){for(let i=1;i<=31;i++)bands[i].classList.remove('cut','wrong','right','lit')}
+
+function onBand(i){
+  if(!S.running){
+    clearTimeout(S.listenTimer); tone(ISO[i],false); resetFaders(); bands[i].classList.add('lit');
+    S.listenTimer=setTimeout(()=>{stopTone(false);bands[i].classList.remove('lit')},1000); return;
+  }
+  const b=bands[i]; if(b.classList.contains('cut'))return;
+  b.classList.add('cut');
+  if(ISO[i]!==S.isoF){
+    b.classList.add('wrong'); S.miss++; S.roundMiss++; S.cur.wrong.push(NAME[i]);
+    setMsg(`Errado. ${S.roundMiss} erro${S.roundMiss>1?'s':''} nesta rodada.`,'bad'); renderScore(); renderHist();
+  }else{
+    b.classList.add('right'); stopTone(false); S.hits++; S.cur.hit=NAME[i];
+    setMsg(`Certo! Era ${fmtHz(S.actual)}.`,'ok'); renderScore(); renderHist();
+    if(S.left===0) setTimeout(finish,900); else setTimeout(nextRound,900);
+  }
+}
+
+// ---- Rodadas ----
+function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function nextRound(){
+  if(!S.running)return;
+  S.left--;
+  const lo=opt.minId,hi=opt.maxId; let id;
+  if(opt.weight) id=Math.round(gauss()*((hi-lo)/8)+(hi-lo)/2+lo); else id=Math.floor(Math.random()*(hi+1-lo))+lo;
+  id=Math.min(hi,Math.max(lo,id));
+  S.isoF=ISO[id]; S.actual=S.isoF;
+  if(!opt.iso){
+    if(Math.random()<0.5) S.actual+=Math.floor(Math.random()*(Math.abs(ISO[id+1]-S.isoF)/2));
+    else S.actual-=Math.floor(Math.random()*(Math.abs(ISO[id-1]-S.isoF)/2));
+  }
+  resetFaders(); S.roundMiss=0;
+  S.cur={target:S.actual,wrong:[],hit:null}; S.history.push(S.cur);
+  setMsg('Ouça. Qual banda está microfonando?'); $('round').textContent=`${S.total-S.left}/${S.total}`;
+  tone(S.actual,opt.ramp); renderHist();
+}
+function startSession(){
+  ensureAudio(); clearTimeout(S.listenTimer);
+  S.running=true; S.left=S.total=opt.goes; S.history=[]; S.hits=S.miss=0;
+  if(opt.pink)startPink();
+  $('btnStart').textContent='Parar'; $('btnStart').classList.add('running'); $('led').classList.add('on');
+  renderScore(); nextRound();
+}
+function stopSession(){
+  S.running=false; stopTone(false); stopPink(); resetFaders();
+  $('btnStart').textContent='Iniciar treino'; $('btnStart').classList.remove('running'); $('led').classList.remove('on');
+  $('round').textContent='–';
+  setMsg('Toque num fader para ouvir a banda. Iniciar começa o treino.');
+}
+function finish(){
+  stopSession();
+  const g=grade();
+  $('rGrade').textContent=fmtGrade(g);
+  $('rGrade').className='grade mono '+(g>=9?'g4':g>=7?'':g>=5?'g2':'g1');
+  $('rSub').textContent=g>=9?'Ouvido afiado.':g>=7?'Bom. Continue treinando.':g>=5?'Na média. Repita a faixa que mais errou.':'Difícil hoje. Tente uma faixa menor e vá ampliando.';
+  $('rRounds').textContent=S.total; $('rHits').textContent=S.hits; $('rMiss').textContent=S.miss;
+  $('result').showModal();
+}
+$('btnStart').addEventListener('click',()=>S.running?stopSession():startSession());
+$('rAgain').addEventListener('click',()=>{$('result').close();startSession()});
+$('rClose').addEventListener('click',()=>$('result').close());
+
+// ---- Pontuação ----
+function grade(){const t=S.hits+S.miss;return t?10*S.hits/t:0}
+function fmtGrade(g){return g.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}
+function renderScore(){$('score').textContent=(S.hits+S.miss)?fmtGrade(grade()):'–'}
+
+// ---- UI ----
+function setMsg(t,cls){const m=$('msg');m.textContent=t;m.className='msg'+(cls?' '+cls:'')}
+function fmtHz(f){return f>=1000?(f/1000).toLocaleString('pt-BR',{maximumFractionDigits:2})+' kHz':f+' Hz'}
+function renderHist(){}
+function bindFader(id,key,node){
+  const el=$(id),v=$(id+'V'); el.value=opt[key]; v.textContent=opt[key];
+  el.addEventListener('input',e=>{opt[key]=+e.target.value;v.textContent=opt[key];store.set(key,opt[key]);if(node())node().gain.value=(opt[key]/100)**2});
+}
+bindFader('vol','vol',()=>master); bindFader('volPink','volPink',()=>pinkGain);
+$('pinkOn').checked=opt.pink;
+$('pinkOn').addEventListener('change',e=>{opt.pink=e.target.checked;store.set('pink',opt.pink);if(S.running){opt.pink?startPink():stopPink()}});
+
+const dlg=$('opt'),minF=$('minF'),maxF=$('maxF');
+for(let i=1;i<=31;i++){minF.add(new Option(NAME[i]+' Hz',i));maxF.add(new Option(NAME[i]+' Hz',i))}
+function loadOpts(){minF.value=opt.minId;maxF.value=opt.maxId;$('goes').value=opt.goes;$('weight').checked=opt.weight;$('iso').checked=opt.iso;$('ramp').checked=opt.ramp}
+$('btnOpt').addEventListener('click',()=>{loadOpts();dlg.showModal()});
+dlg.addEventListener('close',()=>{
+  let lo=+minF.value,hi=+maxF.value; if(lo>hi)[lo,hi]=[hi,lo];
+  opt.minId=lo;opt.maxId=hi;opt.goes=Math.max(1,Math.min(50,+$('goes').value||5));
+  opt.weight=$('weight').checked;opt.iso=$('iso').checked;opt.ramp=$('ramp').checked;
+  for(const k of ['minId','maxId','goes','weight','iso','ramp'])store.set(k,opt[k]);
+  paintRange();
+});
+
+const sc=$('eqScroll');
+sc.addEventListener('scroll',()=>{$('eqHint').style.display='none'},{once:true});
+paintRange();
+requestAnimationFrame(()=>{const c=bands[Math.round((opt.minId+opt.maxId)/2)];if(c)sc.scrollLeft=c.offsetLeft-sc.clientWidth/2});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+window.addEventListener('pagehide',()=>{stopTone(true);stopPink()});
+</script>
+</body>
+</html>
