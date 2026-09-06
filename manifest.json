@@ -1,0 +1,10 @@
+{
+  "name": "SFT Feedback Trainer",
+  "short_name": "SFT",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1216",
+  "theme_color": "#0f1216",
+  "icons": [{"src": "icon.png", "sizes": "512x512", "type": "image/png"}]
+}
